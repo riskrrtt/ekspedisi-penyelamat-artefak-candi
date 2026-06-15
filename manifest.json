@@ -4,7 +4,7 @@
   "description": "Game petualangan — selamatkan artefak candi dari ancaman monster!",
   "start_url": "./index.html",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "landscape",
   "theme_color": "#3a1500",
   "background_color": "#000000",
