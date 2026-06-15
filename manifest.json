@@ -1,0 +1,30 @@
+{
+  "name": "Ekspedisi Penyelamat Artefak Candi",
+  "short_name": "Artefak Candi",
+  "description": "Game petualangan — selamatkan artefak candi dari ancaman monster!",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#3a1500",
+  "background_color": "#000000",
+  "lang": "id",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "menu/logo_judul.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "menu/menu_bg.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Menu Utama"
+    }
+  ]
+}

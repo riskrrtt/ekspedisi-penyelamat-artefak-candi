@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- ── PWA & Mobile Meta ── -->
+  <meta name="application-name" content="Artefak Candi" />
+  <meta name="description" content="Game petualangan — selamatkan artefak candi dari ancaman monster!" />
+  <meta name="theme-color" content="#3a1500" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- iOS Safari -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Artefak Candi" />
+
+  <!-- iOS Icons (fallback jika manifest tidak terbaca Safari) -->
+  <link rel="apple-touch-icon" href="menu/logo_judul.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="menu/logo_judul.png" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <title>Ekspedisi Penyelamat Artefak Candi</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      touch-action: none;
+      /* Prevent callout on long press (iOS) */
+      -webkit-touch-callout: none;
+    }
+
+    /* ── Portrait overlay ── */
+    #rotate-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #000;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #ffd166;
+      text-align: center;
+      padding: 24px;
+    }
+    #rotate-overlay .icon {
+      font-size: 72px;
+      animation: rotateAnim 1.4s ease-in-out infinite;
+    }
+    #rotate-overlay p {
+      margin-top: 20px;
+      font-size: 20px;
+      font-weight: bold;
+      line-height: 1.5;
+    }
+    @keyframes rotateAnim {
+      0%   { transform: rotate(0deg); }
+      40%  { transform: rotate(90deg); }
+      60%  { transform: rotate(90deg); }
+      100% { transform: rotate(90deg); }
+    }
+    @media (orientation: portrait) {
+      #rotate-overlay { display: flex; }
+    }
+
+    /* ── Install Prompt Banner ── */
+    #install-banner {
+      display: none;
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9998;
+      background: rgba(58, 21, 0, 0.95);
+      border: 2px solid #ffd166;
+      border-radius: 14px;
+      padding: 10px 18px;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.7);
+      max-width: 90vw;
+      animation: slideUp 0.3s ease;
+    }
+    #install-banner.show { display: flex; }
+    #install-banner span {
+      color: #ffd166;
+      font-size: 14px;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+    #install-banner button {
+      background: #ffd166;
+      color: #3a1500;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 16px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #install-banner button.dismiss {
+      background: transparent;
+      color: #aaa;
+      padding: 6px 8px;
+      font-size: 18px;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Portrait warning overlay -->
+  <div id="rotate-overlay">
+    <div class="icon">📱</div>
+    <p>Putar perangkat ke mode<br><strong>Landscape</strong> untuk bermain</p>
+  </div>
+
+  <!-- PWA Install Banner -->
+  <div id="install-banner">
+    <span>🏛️ Install Game</span>
+    <button id="install-btn">Install</button>
+    <button class="dismiss" id="dismiss-btn" aria-label="Tutup">✕</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+  <script src="game.js"></script>
+
+  <script>
+    // ── Service Worker Registration ──────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[SW] Registered, scope:', reg.scope))
+          .catch(err => console.warn('[SW] Registration failed:', err));
+      });
+    }
+
+    // ── PWA Install Prompt ───────────────────────────────────
+    let deferredPrompt = null;
+    const banner     = document.getElementById('install-banner');
+    const installBtn = document.getElementById('install-btn');
+    const dismissBtn = document.getElementById('dismiss-btn');
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      // Tampilkan banner setelah 3 detik agar tidak langsung mengganggu
+      setTimeout(() => { banner.classList.add('show'); }, 3000);
+    });
+
+    installBtn.addEventListener('click', () => {
+      if (!deferredPrompt) return;
+      banner.classList.remove('show');
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(result => {
+        console.log('[PWA] Install choice:', result.outcome);
+        deferredPrompt = null;
+      });
+    });
+
+    dismissBtn.addEventListener('click', () => {
+      banner.classList.remove('show');
+    });
+
+    // Sembunyikan banner jika sudah terinstall
+    window.addEventListener('appinstalled', () => {
+      banner.classList.remove('show');
+      deferredPrompt = null;
+      console.log('[PWA] App installed successfully');
+    });
+  </script>
+</body>
+</html>
