@@ -102,14 +102,14 @@ function loadImage(key, src) {
 
 loadImage('menuBg',        'menu/menu_bg.png');
 loadImage('logoJudul',     'menu/logo_judul.png');
-loadImage('lvl1Bg',        'environment/background and ground/level_1_ground.png');
-loadImage('lvl2Bg',        'environment/background and ground/level_2_ground.png');
-loadImage('dalamCandi',    'environment/background and ground/dalam_candi-ground.png');
-loadImage('scene3Bg',      'environment/background and ground/scene3_bg.png');
+loadImage('lvl1Bg',        'environment/background_and_ground/level_1_ground.png');
+loadImage('lvl2Bg',        'environment/background_and_ground/level_2_ground.png');
+loadImage('dalamCandi',    'environment/background_and_ground/scene3_bg.png');
+loadImage('scene3Bg',      'environment/background_and_ground/scene3_bg.png');
 loadImage('temple',        'environment/building/temple.png');
 loadImage('altar',         'environment/props/altar.png');
 loadImage('monster1',      'enemies/monster_1.png');
-loadImage('monster2',      'enemies/monster 2.png');
+loadImage('monster2',      'enemies/monster_2.png');
 loadImage('bossWalk1',     'character/boss/walk_1.png');
 loadImage('bossWalk2',     'character/boss/walk_2.png');
 loadImage('bossWalk3',     'character/boss/walk_3.png');

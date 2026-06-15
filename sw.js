@@ -19,9 +19,9 @@ const PRECACHE_URLS = [
   './menu/logo_judul.png',
 
   // Environment
-  './environment/background and ground/level_1_ground.png',
-  './environment/background and ground/level_2_ground.png',
-  './environment/background and ground/scene3_bg.png',
+  './environment/background_and_ground/level_1_ground.png',
+  './environment/background_and_ground/level_2_ground.png',
+  './environment/background_and_ground/scene3_bg.png',
   './environment/building/temple.png',
   './environment/props/altar.png',
 
@@ -43,7 +43,7 @@ const PRECACHE_URLS = [
 
   // Enemies
   './enemies/monster_1.png',
-  './enemies/monster 2.png',
+  './enemies/monster_2.png',
 
   // Items
   './items/artefact_1.png',
