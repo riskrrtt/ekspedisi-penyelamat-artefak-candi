@@ -6,26 +6,55 @@ const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
 const BASE_W = 1280;
-const BASE_H = 720;
+const BASE_H = 576;   // 1280 × 9/20 = 576  →  rasio 20:9
 canvas.width  = BASE_W;
 canvas.height = BASE_H;
 
 // ============================================================
-//  RESPONSIVE CANVAS — menjaga aspect ratio 16:9 di semua layar
+//  RESPONSIVE CANVAS — stretch penuh ke layar, jaga rasio 20:9
 // ============================================================
 function resizeCanvas() {
   const winW = window.innerWidth;
   const winH = window.innerHeight;
   const scale = Math.min(winW / BASE_W, winH / BASE_H);
-  canvas.style.width  = Math.floor(BASE_W * scale) + 'px';
-  canvas.style.height = Math.floor(BASE_H * scale) + 'px';
+  const cw = Math.floor(BASE_W * scale);
+  const ch = Math.floor(BASE_H * scale);
+  canvas.style.width  = cw + 'px';
+  canvas.style.height = ch + 'px';
+  // Pusatkan canvas di layar
+  canvas.style.position = 'absolute';
+  canvas.style.left = Math.floor((winW - cw) / 2) + 'px';
+  canvas.style.top  = Math.floor((winH - ch) / 2) + 'px';
 }
 resizeCanvas();
-window.addEventListener('resize',       resizeCanvas);
-window.addEventListener('orientationchange', () => {
-  // Beri sedikit delay agar browser selesai merotasi layar
-  setTimeout(resizeCanvas, 200);
-});
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
+
+// ============================================================
+//  FULLSCREEN API — aktif saat user pertama kali tap layar
+// ============================================================
+function requestFullscreen() {
+  const el = document.documentElement;
+  if      (el.requestFullscreen)       el.requestFullscreen({ navigationUI: 'hide' });
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else if (el.mozRequestFullScreen)    el.mozRequestFullScreen();
+}
+
+// Trigger fullscreen pada interaksi pertama (wajib ada gesture di mobile)
+let fullscreenRequested = false;
+function tryFullscreen() {
+  if (fullscreenRequested) return;
+  fullscreenRequested = true;
+  requestFullscreen();
+  // Resize ulang setelah masuk fullscreen
+  setTimeout(resizeCanvas, 400);
+}
+window.addEventListener('pointerdown', tryFullscreen, { once: true });
+window.addEventListener('touchstart',  tryFullscreen, { once: true, passive: true });
+
+// Re-resize saat browser masuk/keluar fullscreen
+document.addEventListener('fullscreenchange',       resizeCanvas);
+document.addEventListener('webkitfullscreenchange', resizeCanvas);
 
 // ============================================================
 //  NONAKTIFKAN ZOOM & SCROLL di seluruh halaman
@@ -53,7 +82,7 @@ document.addEventListener('gestureend',    e => e.preventDefault(), { passive: f
 // ============================================================
 //  CONSTANTS
 // ============================================================
-const GROUND_Y   = 610;          // top of ground surface (scaled from 420/506 → ~600/720)
+const GROUND_Y   = 488;          // top of ground surface  ≈ 85% dari BASE_H 576
 const GROUND_H   = BASE_H - GROUND_Y;
 const SPEED      = 200;          // player walk px/s
 const JUMP_FORCE = -520;
@@ -1060,7 +1089,7 @@ function drawCollectible(c) {
 //  Proporsional dengan player/boss, ujung kanan map
 // ============================================================
 const TEMPLE_W = 200;
-const TEMPLE_H = 260;   // proporsional di 1280×720
+const TEMPLE_H = 210;   // proporsional di 1280×576 (20:9)
 const TEMPLE_X = BASE_W - TEMPLE_W - 10;
 
 function createTempleDoor() {
