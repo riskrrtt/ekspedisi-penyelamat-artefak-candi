@@ -2,7 +2,7 @@
 //  SERVICE WORKER — Ekspedisi Penyelamat Artefak Candi
 //  Versi cache: update string ini setiap deploy baru
 // ============================================================
-const CACHE_NAME = 'artefak-candi-v1';
+const CACHE_NAME = 'artefak-candi-v2';
 
 // Semua file yang di-cache saat install
 const PRECACHE_URLS = [
