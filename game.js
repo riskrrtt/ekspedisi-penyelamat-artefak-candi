@@ -851,7 +851,7 @@ function updateBoss(b, dt) {
   b.x += b.vx * b.dir * dt;
 
   // Patrol hanya di area tengah — tidak masuk area temple (kanan) maupun terlalu kiri
-  if (b.x <= 300)    { b.x = 300;  b.dir =  1; }
+  if (b.x <= 500)    { b.x = 500;  b.dir =  1; }
   if (b.x >= 900)    { b.x = 900;  b.dir = -1; }
 
   b.y = GROUND_Y - b.h;
@@ -1481,9 +1481,11 @@ let S3 = null;
 function initScene3() {
   const prevArtefacts = player.artefacts;
   const prevKey       = player.hasKey;
+  const prevHp        = player.hp;          // bawa HP dari Level 2
   player = createPlayer(60);
   player.artefacts = prevArtefacts;
   player.hasKey    = prevKey;
+  player.hp        = Math.min(player.maxHp, prevHp);  // jangan reset HP
 
   S3 = {
     altar: createAltar(BASE_W - 130),
