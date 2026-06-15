@@ -457,10 +457,15 @@ function drawHUD() {
   for (let i = 0; i < 3; i++) {
     const ix = LX + 78 + i * (ICON + 6);
     ctx.save();
-    ctx.globalAlpha = i < player.artefacts ? 1 : 0.2;
     if (i < player.artefacts) {
+      // Sudah didapat — warna penuh dengan glow
+      ctx.globalAlpha = 1;
       ctx.shadowColor = '#ffd70088';
       ctx.shadowBlur  = 7;
+    } else {
+      // Belum didapat — grayscale, opacity cukup tinggi agar tetap terbaca
+      ctx.globalAlpha = 0.65;
+      ctx.filter      = 'grayscale(100%) brightness(0.75)';
     }
     drawSprite(artKeys[i], ix, artY, ICON, ICON, false);
     ctx.restore();
@@ -476,10 +481,15 @@ function drawHUD() {
   ctx.fillText('Kunci', LX, keyY + ICON * 0.72);
 
   ctx.save();
-  ctx.globalAlpha = player.hasKey ? 1 : 0.2;
   if (player.hasKey) {
+    // Sudah didapat — warna penuh dengan glow
+    ctx.globalAlpha = 1;
     ctx.shadowColor = '#ffe06688';
     ctx.shadowBlur  = 7;
+  } else {
+    // Belum didapat — grayscale, opacity cukup tinggi agar tetap terbaca
+    ctx.globalAlpha = 0.65;
+    ctx.filter      = 'grayscale(100%) brightness(0.75)';
   }
   drawSprite('iconKey', LX + 60, keyY, ICON, ICON, false);
   ctx.restore();
@@ -828,7 +838,6 @@ function createBoss(x) {
     vx: 90,
     dir: 1,
     invincible: 0,
-    blinkTimer: 0,
     deadTimer: 0,
     stunTimer: 0,   // > 0 = boss sedang stun, tidak bergerak & tidak damage
     frame: 0,
@@ -843,7 +852,6 @@ function updateBoss(b, dt) {
   if (b.stunTimer > 0) {
     b.stunTimer -= dt;
     b.y = GROUND_Y - b.h;
-    if (b.blinkTimer > 0) b.blinkTimer -= dt;
     if (b.invincible > 0) b.invincible -= dt;
     return;  // skip movement & anim
   }
@@ -863,7 +871,6 @@ function updateBoss(b, dt) {
     b.frame = (b.frame + 1) % BOSS_WALK_FRAMES.length;
   }
 
-  if (b.blinkTimer > 0) b.blinkTimer -= dt;
   if (b.invincible > 0) b.invincible -= dt;
 }
 
@@ -875,37 +882,10 @@ function drawBoss(b) {
   ctx.save();
 
   if (b.stunTimer > 0) {
-    // Saat stun: sprite normal lalu overlay merah transparan menggunakan
-    // source-atop sehingga tint mengikuti bentuk sprite, bukan kotak
-    ctx.globalAlpha = alpha;
+    // Saat stun: sprite berkedip (visible ↔ transparan) — sama seperti Arga saat kena damage
+    const visible = Math.floor(b.stunTimer * 10) % 2 === 0;
+    ctx.globalAlpha = visible ? alpha : 0.15;
     drawSprite(frameKey, b.x, b.y, b.w, b.h, b.dir < 0);
-
-    // Berkedip lambat — setiap ~0.15 s berganti
-    const showTint = Math.floor(b.stunTimer * 7) % 2 === 0;
-    if (showTint) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.globalAlpha = 0.42;
-      ctx.fillStyle   = '#ff4444';
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.restore();
-    }
-
-  } else if (b.blinkTimer > 0) {
-    // Hit blink: sprite berkedip putih singkat (invincibility frames)
-    const showWhite = Math.floor(b.blinkTimer * 14) % 2 === 0;
-    ctx.globalAlpha = showWhite ? 0.15 : alpha;
-    drawSprite(frameKey, b.x, b.y, b.w, b.h, b.dir < 0);
-
-    if (showWhite && alpha > 0.1) {
-      ctx.save();
-      ctx.globalAlpha = 0.55;
-      ctx.globalCompositeOperation = 'source-atop';
-      ctx.fillStyle   = '#ffffff';
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      ctx.restore();
-    }
-
   } else {
     // Normal
     ctx.globalAlpha = alpha;
@@ -924,21 +904,12 @@ function drawBoss(b) {
     ctx.fillStyle = b.hp > 1 ? '#e22' : '#ff6600';
     ctx.fillRect(bx, by, bw * (b.hp / b.maxHp), bh);
     ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
-    if (b.stunTimer > 0) {
-      ctx.font        = 'bold 11px sans-serif';
-      ctx.fillStyle   = '#ff8888';
-      ctx.textAlign   = 'center';
-      ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
-      ctx.fillText('STUN', b.x + b.w / 2, by - 3);
-      ctx.shadowBlur  = 0;
-    }
   }
 }
 
 function stompBoss(b) {
   if (b.invincible > 0) return false;
   b.hp--;
-  b.blinkTimer = 0.8;
   b.invincible = 1.2;
   b.stunTimer  = 1.0;   // 1 detik stun — boss diam & tidak damage
   if (b.hp <= 0) { b.alive = false; b.stunTimer = 0; }
@@ -1148,23 +1119,105 @@ function drawTempleDoor(unlocked) {
 //  ALTAR (Scene 3)
 // ============================================================
 function createAltar(x) {
-  return { x, y: GROUND_Y - 110, w: 110, h: 110 };
+  return {
+    x, y: GROUND_Y - 110, w: 110, h: 110,
+    // Partikel cahaya sakral mengambang di sekitar altar
+    particles: [],
+  };
+}
+
+// Spawn satu partikel cahaya baru dari area altar
+function spawnAltarParticle(altar) {
+  const cx = altar.x + altar.w / 2;
+  const cy = altar.y + altar.h * 0.4;          // pusat sedikit di atas tengah sprite
+  const angle  = Math.random() * Math.PI * 2;
+  const radius = 20 + Math.random() * 55;       // muncul dalam radius 20–75 px
+  altar.particles.push({
+    x:    cx + Math.cos(angle) * radius,
+    y:    cy + Math.sin(angle) * radius * 0.55, // oval — kompres sumbu Y
+    vx:   (Math.random() - 0.5) * 18,
+    vy:   -(6 + Math.random() * 22),            // mengambang ke atas
+    life: 0.8 + Math.random() * 1.0,            // 0.8–1.8 detik
+    maxLife: 0,
+    size: 2 + Math.random() * 4,
+    hue:  40 + Math.random() * 30,              // kuning–jingga (40°–70°)
+  });
+  altar.particles[altar.particles.length - 1].maxLife =
+    altar.particles[altar.particles.length - 1].life;
+}
+
+function updateAltarParticles(altar, dt) {
+  // Spawn baru secara berkala
+  if (Math.random() < dt * 14) spawnAltarParticle(altar);
+
+  altar.particles = altar.particles.filter(p => {
+    p.x    += p.vx * dt;
+    p.y    += p.vy * dt;
+    p.life -= dt;
+    return p.life > 0;
+  });
 }
 
 function drawAltar(altar) {
-  drawSprite('altar', altar.x, altar.y, altar.w, altar.h, false);
-  // Glow
+  const cx   = altar.x + altar.w / 2;
+  const cy   = altar.y + altar.h * 0.4;   // pusat cahaya — sedikit di atas tengah sprite
+  const t    = Date.now() / 1000;
+  const pulse = 0.85 + 0.15 * Math.sin(t * 2.4);  // napas lambat 0.85–1.0
+
+  // ── Layer 1: aura luar — oval lebar, sangat transparan ──────────
+  const g1 = ctx.createRadialGradient(cx, cy, 0, cx, cy, 160 * pulse);
+  g1.addColorStop(0.0, `rgba(255, 220, 80,  ${0.18 * pulse})`);
+  g1.addColorStop(0.4, `rgba(255, 180, 30,  ${0.10 * pulse})`);
+  g1.addColorStop(1.0, 'rgba(255, 140,  0,  0)');
   ctx.save();
-  ctx.globalAlpha = 0.3 + 0.2 * Math.sin(Date.now() / 400);
-  ctx.fillStyle   = '#ffd166';
-  ctx.fillRect(altar.x, altar.y, altar.w, altar.h);
+  ctx.scale(1, 0.5);                       // tekan sumbu Y → bentuk oval
+  ctx.fillStyle = g1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy * 2, 160 * pulse, 160 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 
+  // ── Layer 2: corona tengah — oval lebih kecil, lebih terang ─────
+  const g2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80 * pulse);
+  g2.addColorStop(0.0, `rgba(255, 240, 160, ${0.55 * pulse})`);
+  g2.addColorStop(0.35, `rgba(255, 210,  60, ${0.30 * pulse})`);
+  g2.addColorStop(1.0, 'rgba(255, 160,   0,  0)');
   ctx.save();
-  ctx.font      = 'bold 12px sans-serif';
-  ctx.fillStyle = '#ffd166';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+  ctx.scale(1, 0.55);
+  ctx.fillStyle = g2;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy * (1 / 0.55), 80 * pulse, 80 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ── Sprite altar (di atas glow bawah, di bawah glow atas) ───────
+  drawSprite('altar', altar.x, altar.y, altar.w, altar.h, false);
+
+  // ── Layer 3: inner core — titik paling terang di pusat altar ────
+  const g3 = ctx.createRadialGradient(cx, cy, 0, cx, cy, 36 * pulse);
+  g3.addColorStop(0.0, `rgba(255, 255, 220, ${0.70 * pulse})`);
+  g3.addColorStop(0.5, `rgba(255, 230,  80, ${0.30 * pulse})`);
+  g3.addColorStop(1.0, 'rgba(255, 200,   0,  0)');
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';   // additive — buat titik terang menyala
+  ctx.fillStyle = g3;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 36 * pulse, 20 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ── Partikel cahaya mengambang ───────────────────────────────────
+  ctx.save();
+  for (const p of altar.particles) {
+    const a = (p.life / p.maxLife);           // fade out seiring waktu
+    ctx.globalAlpha = a * 0.85;
+    ctx.fillStyle   = `hsl(${p.hue}, 100%, 80%)`;
+    ctx.shadowColor = `hsl(${p.hue}, 100%, 70%)`;
+    ctx.shadowBlur  = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * a, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -1488,7 +1541,7 @@ function initScene3() {
   player.hp        = Math.min(player.maxHp, prevHp);  // jangan reset HP
 
   S3 = {
-    altar: createAltar(BASE_W - 130),
+    altar: createAltar(BASE_W / 2 - 55),   // tengah layar (altar w=110, center = BASE_W/2)
     reached: false,
   };
   notifications = [];
@@ -1498,6 +1551,7 @@ function initScene3() {
 function updateScene3(dt) {
   updatePlayer(dt);
   updateNotifs(dt);
+  if (S3) updateAltarParticles(S3.altar, dt);
 
   // Right wall to prevent going off screen
   if (player.x + player.w > BASE_W - 5) player.x = BASE_W - player.w - 5;
@@ -1522,9 +1576,17 @@ function updateScene3(dt) {
 function drawScene3() {
   drawBg('scene3Bg', '#0a0d06');
   if (S3.reached) {
+    // 3 artefak tersusun simetris di atas altar
+    // icon 32x32, gap 10px, total lebar = 3*32 + 2*10 = 116
+    // pusatkan terhadap pusat altar
+    const ICON_W  = 32;
+    const ICON_GAP = 10;
+    const totalW  = 3 * ICON_W + 2 * ICON_GAP;
+    const startX  = S3.altar.x + S3.altar.w / 2 - totalW / 2;
+    const iconY   = S3.altar.y - ICON_W - 8;   // 8px di atas tepi atas sprite altar
     for (let i = 0; i < 3; i++) {
       drawSprite(`artefact${i + 1}`,
-        S3.altar.x + 4 + i * 26, S3.altar.y - 30, 24, 24, false);
+        startX + i * (ICON_W + ICON_GAP), iconY, ICON_W, ICON_W, false);
     }
   }
   drawAltar(S3.altar);
@@ -1590,23 +1652,22 @@ function drawGameOver() {
   const py = BASE_H / 2 - ph / 2 - 20;
   drawPanel('panelGameOver', px, py, pw, ph);
 
-  // Game over title image
+  // Game over title image — preserve aspect ratio, max fit dalam panel
   if (imgOk('panelGOTitle')) {
-    const tw = 460, th = 110;
-    ctx.drawImage(ASSETS['panelGOTitle'], BASE_W / 2 - tw / 2, py + 24, tw, th);
+    const img     = ASSETS['panelGOTitle'];
+    const maxW    = pw - 60;          // maksimal lebar dalam panel (margin 30px tiap sisi)
+    const maxH    = ph - 48;          // maksimal tinggi dalam panel
+    const scale   = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+    const tw      = img.naturalWidth  * scale;
+    const th      = img.naturalHeight * scale;
+    ctx.drawImage(img, BASE_W / 2 - tw / 2, py + (ph - th) / 2, tw, th);
   } else {
     ctx.textAlign   = 'center';
     ctx.font        = 'bold 62px serif';
     ctx.fillStyle   = '#e63946';
     ctx.shadowColor = '#000'; ctx.shadowBlur = 20;
-    ctx.fillText('GAME OVER', BASE_W / 2, py + 100);
+    ctx.fillText('GAME OVER', BASE_W / 2, py + ph / 2 + 20);
   }
-
-  ctx.textAlign   = 'center';
-  ctx.font        = '20px sans-serif';
-  ctx.fillStyle   = '#ccc';
-  ctx.shadowBlur  = 0;
-  ctx.fillText('Arga tidak berhasil menyelesaikan misinya.', BASE_W / 2, py + 180);
 
   // Dua tombol berdampingan: Mulai Ulang | Kembali
   const btnY    = py + ph + 50;
@@ -1637,46 +1698,73 @@ function drawEnding() {
   ctx.save();
   ctx.globalAlpha = endingAlpha;
 
-  // Panel di tengah
-  const pw = 740, ph = 320;
+  // ── Layout constants ──────────────────────────────────────
+  const ALTAR_W  = 110, ALTAR_H  = 110;
+  const ICON_W   = 30,  ICON_GAP = 12;   // 3 artefak: total = 3*30 + 2*12 = 114px
+  const ICON_ROW_H = ICON_W;
+  const PAD_TOP    = 18;   // jarak dari tepi atas panel ke baris pertama
+  const GAP_ART_ALT = 4;   // jarak antara bawah artefak dan atas altar
+  const GAP_ALT_TXT = 5;  // jarak antara bawah altar dan baris teks pertama
+  const LINE_H     = 20;   // tinggi per baris teks utama
+  const GAP_TXT_SUB = 2;   // jarak antara teks utama dan subteks
+  const SUB_H      = 20;
+  const PAD_BOT    = 18;   // jarak dari subteks ke tepi bawah panel
+
+  const contentH = PAD_TOP + ICON_ROW_H + GAP_ART_ALT + ALTAR_H +
+                   GAP_ALT_TXT + LINE_H * 2 + GAP_TXT_SUB + SUB_H + PAD_BOT;
+
+  const pw = 700;
+  const ph = contentH;                         // panel tingginya pas konten
   const px = BASE_W / 2 - pw / 2;
-  const py = BASE_H / 2 - ph / 2 - 40;
+  const py = BASE_H / 2 - ph / 2 - 30;        // sedikit di atas tengah layar
+
   drawPanel('panelDialog', px, py, pw, ph);
 
-  // Altar + artefak di atas panel
-  if (imgOk('altar'))
-    ctx.drawImage(ASSETS['altar'], BASE_W / 2 - 64, py + 36, 128, 128);
+  // ── Baris 1: Artefak ─────────────────────────────────────
+  const totalArtW = 3 * ICON_W + 2 * ICON_GAP;
+  const artStartX = BASE_W / 2 - totalArtW / 2;
+  const artY      = py + PAD_TOP;
   for (let i = 0; i < 3; i++)
-    drawSprite(`artefact${i + 1}`, BASE_W / 2 - 58 + i * 46, py + 16, 38, 38, false);
+    drawSprite(`artefact${i + 1}`,
+      artStartX + i * (ICON_W + ICON_GAP), artY, ICON_W, ICON_W, false);
 
+  // ── Baris 2: Altar ───────────────────────────────────────
+  const altarX = BASE_W / 2 - ALTAR_W / 2;
+  const altarY = artY + ICON_ROW_H + GAP_ART_ALT;
+  if (imgOk('altar'))
+    ctx.drawImage(ASSETS['altar'], altarX, altarY, ALTAR_W, ALTAR_H);
+
+  // ── Baris 3: Teks utama ──────────────────────────────────
+  const txt1Y = altarY + ALTAR_H + GAP_ALT_TXT + LINE_H * 0.8;
   ctx.textAlign   = 'center';
-  ctx.font        = 'bold 40px serif';
+  ctx.font        = 'bold 26px serif';
   ctx.fillStyle   = '#ffd166';
-  ctx.shadowColor = '#000'; ctx.shadowBlur = 16;
-  ctx.fillText('"Artefak telah kembali…', BASE_W / 2, py + 188);
-  ctx.fillText('candi kembali aman."', BASE_W / 2, py + 236);
+  ctx.shadowColor = '#000'; ctx.shadowBlur = 12;
+  ctx.fillText('"Artefak telah kembali…', BASE_W / 2, txt1Y);
+  ctx.fillText('candi kembali aman."',   BASE_W / 2, txt1Y + LINE_H);
 
-  ctx.font        = '18px sans-serif';
-  ctx.fillStyle   = '#ccc';
+  // ── Baris 4: Subteks ─────────────────────────────────────
+  ctx.font        = '14px sans-serif';
+  ctx.fillStyle   = '#bbb';
   ctx.shadowBlur  = 0;
-  ctx.fillText('— Misi Arga telah selesai —', BASE_W / 2, py + 278);
+  ctx.fillText('— Misi Arga telah selesai —', BASE_W / 2, txt1Y + LINE_H * 2 + GAP_TXT_SUB);
 
   ctx.restore();
 
-  // Dua tombol: Main Lagi | Kembali ke Menu
-  const btnY    = py + ph + 60;
-  const btnW    = 260, btnH = 74;
-  const gap     = 24;
+  // ── Tombol: Main Lagi | Kembali ke Menu ──────────────────
+  const btnY  = py + ph + 50;
+  const btnW  = 260, btnH = 74;
+  const gap   = 24;
 
-    if (drawButton('btnKembaliEnding', BASE_W / 2 + btnW / 2 + gap / 2, btnY, btnW, btnH)) {
-    playSFX('sfxButton');
-    endingAlpha = 0;
-    scene = SCENE.MENU;
-  }
-    if (drawButton('btnMainLagi', BASE_W / 2 - btnW / 2 - gap / 2, btnY, btnW, btnH)) {
+  if (drawButton('btnMainLagi',      BASE_W / 2 - btnW / 2 - gap / 2, btnY, btnW, btnH)) {
     playSFX('sfxButton');
     endingAlpha = 0;
     initLevel1();
+  }
+  if (drawButton('btnKembaliEnding', BASE_W / 2 + btnW / 2 + gap / 2, btnY, btnW, btnH)) {
+    playSFX('sfxButton');
+    endingAlpha = 0;
+    scene = SCENE.MENU;
   }
 }
 
